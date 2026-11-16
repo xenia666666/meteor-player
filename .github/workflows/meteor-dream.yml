@@ -1,0 +1,136 @@
+name: Meteor Dream APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/meteor-dream.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meteor-dream-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set up Java 17
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Verify Android compiler and signing tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' > "$RUNNER_TEMP/meteor-sdk-install.log" 2>&1
+          java -version
+          javac -version
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" version
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" version
+          test -x "$ANDROID_HOME/build-tools/35.0.0/d8"
+          echo 'Android SDK 35, build-tools 35.0.0 and Java are available.'
+
+      - name: Restore private source archive
+        id: source
+        shell: bash
+        env:
+          SOURCE_ZIP_BASE64: ${{ secrets.METEOR_DREAM_SOURCE_ZIP_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 - <<'PY'
+          import base64, io, os, pathlib, stat, zipfile
+          secret = os.environ.get('SOURCE_ZIP_BASE64', '').strip()
+          if not secret:
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                  output.write('ready=false\n')
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+                  summary.write('## Android build environment verified\n\nAdd the repository Actions secret `METEOR_DREAM_SOURCE_ZIP_BASE64` containing the Base64-encoded private source ZIP, then run this workflow again. No APK was built in this run. Never upload the private source ZIP or signing key as a public repository file.\n')
+              raise SystemExit(0)
+          target = pathlib.Path(os.environ['RUNNER_TEMP']) / 'meteor-dream-private'
+          target.mkdir(mode=0o700)
+          try:
+              data = base64.b64decode(''.join(secret.split()), validate=True)
+              with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                  entries = archive.infolist()
+                  if sum(item.file_size for item in entries) > 20_000_000:
+                      raise ValueError('Archive too large')
+                  for item in entries:
+                      path = pathlib.PurePosixPath(item.filename)
+                      if path.is_absolute() or '..' in path.parts or not path.parts or path.parts[0] != 'Meteor-Dream':
+                          raise ValueError('Unexpected archive path')
+                      if stat.S_ISLNK(item.external_attr >> 16):
+                          raise ValueError('Symlink in archive')
+                  archive.extractall(target)
+              project = target / 'Meteor-Dream'
+              for name in ['build.py', 'app/src/main/AndroidManifest.xml', 'signing/box-tools.p12', 'signing/password.txt']:
+                  if not (project / name).is_file():
+                      raise ValueError('Required source/signing file missing')
+              (project / 'app/src/main/assets').mkdir(parents=True, exist_ok=True)
+              (project / 'signing/password.txt').chmod(0o600)
+          except Exception:
+              raise SystemExit('Private source archive could not be restored. No archive contents are logged.') from None
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('ready=true\n')
+          print('Private source restored; signing key remains outside the repository and artifacts.')
+          PY
+
+      - name: Build and verify signed APK
+        if: steps.source.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          project="$RUNNER_TEMP/meteor-dream-private/Meteor-Dream"
+          test -s "$project/signing/box-tools.p12"
+          test -s "$project/signing/password.txt"
+          if ! python3 "$project/build.py" > "$RUNNER_TEMP/meteor-dream-private/build.log" 2>&1; then
+            echo 'Build failed. Private source and compiler logs are not published.'
+            exit 1
+          fi
+          if test -f "$project/tests/DreamGateTest.java"; then
+            mkdir -p "$RUNNER_TEMP/meteor-dream-private/test-classes"
+            javac --release 8 -encoding UTF-8 -d "$RUNNER_TEMP/meteor-dream-private/test-classes" "$project/app/src/main/java/sk/meteor/dream/DreamGate.java" "$project/tests/DreamGateTest.java" > "$RUNNER_TEMP/meteor-dream-private/tests.log" 2>&1
+            java -cp "$RUNNER_TEMP/meteor-dream-private/test-classes" sk.meteor.dream.DreamGateTest
+          fi
+          mkdir -p "$RUNNER_TEMP/meteor-dream-private/output"
+          count=0
+          for apk in "$project"/build/Meteor-Dream-*.apk; do
+            test -f "$apk"
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/meteor-dream-private/certificate.txt"
+            grep -Fq 'Signer #1 certificate SHA-256 digest: e351b5cee500081c1f7e5a30acdf8379e2017b548677ee00a1a61819692e4857' "$RUNNER_TEMP/meteor-dream-private/certificate.txt"
+            "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c 4 "$apk"
+            cp "$apk" "$RUNNER_TEMP/meteor-dream-private/output/"
+            count=$((count + 1))
+          done
+          test "$count" -eq 1
+          cd "$RUNNER_TEMP/meteor-dream-private/output"
+          sha256sum ./*.apk > SHA256SUMS.txt
+          echo '## Signed Meteor Dream APK built successfully' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Download the Meteor-Dream-APK artifact below. Signature matches the existing Meteor Dream development certificate. Physical box testing is still required.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK only
+        if: steps.source.outputs.ready == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Meteor-Dream-APK
+          path: |
+            ${{ runner.temp }}/meteor-dream-private/output/*.apk
+            ${{ runner.temp }}/meteor-dream-private/output/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove private temporary files
+        if: always()
+        shell: bash
+        run: |
+          rm -rf -- "$RUNNER_TEMP/meteor-dream-private"
+          rm -f -- "$RUNNER_TEMP/meteor-sdk-install.log"
