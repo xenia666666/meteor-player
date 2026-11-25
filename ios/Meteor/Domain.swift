@@ -24,12 +24,13 @@ func decodedTitle(_ text: String) -> String {
     return value
 }
 enum MeteorError: LocalizedError {
-    case http(Int), tooLarge, invalidData, invalidURL, unavailable, secureStorage
+    case http(Int), tooLarge, invalidData, invalidURL, unavailable, secureStorage, httpsRequired
     var errorDescription: String? {
         switch self {
         case .http(let code): return tr("Server odpovedal HTTP \(code).", "HTTP \(code) szerverválasz.", "Server returned HTTP \(code).")
         case .tooLarge: return tr("Odpoveď prekročila povolenú veľkosť.", "A válasz túl nagy.", "Response exceeded the size limit.")
         case .invalidURL: return tr("Zadaj platnú HTTP alebo HTTPS adresu.", "Érvényes HTTP vagy HTTPS cím szükséges.", "Enter a valid HTTP or HTTPS address.")
+        case .httpsRequired: return tr("Táto iOS verzia vyžaduje HTTPS zdroj. HTTP adresa sa automaticky nemení.","Ez az iOS verzió HTTPS forrást igényel. A HTTP cím nem módosul automatikusan.","This iOS version requires an HTTPS source. HTTP addresses are not rewritten.")
         case .secureStorage: return tr("Zabezpečené úložisko nie je dostupné.", "A biztonságos tároló nem elérhető.", "Secure storage unavailable.")
         case .invalidData: return tr("Server vrátil neplatné údaje.", "Érvénytelen szerveradatok.", "Server returned invalid data.")
         case .unavailable: return tr("Obsah nie je dostupný pre tento zdroj.", "A tartalom ehhez a forráshoz nem elérhető.", "Content is unavailable for this source.")
