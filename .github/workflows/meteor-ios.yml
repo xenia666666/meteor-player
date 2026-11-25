@@ -4,6 +4,8 @@ on:
     paths:
       - 'ios/**'
       - 'scripts/generate-ios-project.py'
+      - 'scripts/prepare-ios-assets.sh'
+      - 'scripts/verify-ios-archive.py'
       - '.github/workflows/meteor-ios.yml'
   workflow_dispatch:
 permissions:
@@ -17,6 +19,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare Meteor artwork and app icon
+        run: bash scripts/prepare-ios-assets.sh
       - name: Generate project
         run: python3 scripts/generate-ios-project.py
       - name: Build and run tests on an available iPhone simulator
@@ -25,7 +29,8 @@ jobs:
           set -euo pipefail
           xcodebuild -version
           DEVICE_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; v=[x for k in sorted(d,reverse=True) if ".iOS-" in k for x in d[k] if x.get("isAvailable") and x["name"].startswith("iPhone")]; assert v,"No iPhone simulator installed"; print(v[0]["udid"])')
-          xcodebuild test -project ios/Meteor.xcodeproj -scheme Meteor -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath .ios-build -resultBundlePath ios-results.xcresult CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO | tee ios-build.log
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcodebuild test -project ios/Meteor.xcodeproj -scheme Meteor -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath .ios-build -resultBundlePath ios-results.xcresult CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES -parallel-testing-enabled NO | tee ios-build.log
       - name: Keep diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -43,4 +48,38 @@ jobs:
         with:
           name: Meteor-iOS-SIMULATOR-ONLY
           path: Meteor-iOS-SIMULATOR-ONLY.zip
+          retention-days: 14
+  device-archive:
+    name: Unsigned iPhone and iPad archive
+    runs-on: macos-26-intel
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Meteor artwork and app icon
+        run: bash scripts/prepare-ios-assets.sh
+      - name: Generate project
+        run: python3 scripts/generate-ios-project.py
+      - name: Archive Release for a physical iOS device without distribution signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcodebuild archive -project ios/Meteor.xcodeproj -scheme Meteor -configuration Release -destination 'generic/platform=iOS' -archivePath .ios-device/Meteor.xcarchive -derivedDataPath .ios-device-build CODE_SIGNING_ALLOWED=NO | tee ios-device-archive.log
+          python3 scripts/verify-ios-archive.py .ios-device/Meteor.xcarchive
+      - name: Keep archive diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Meteor-iOS-device-archive-diagnostics
+          path: |
+            ios-device-archive.log
+            ios-device-archive-report.json
+          retention-days: 14
+      - name: Package verification archive
+        shell: bash
+        run: ditto -c -k --keepParent .ios-device/Meteor.xcarchive Meteor-iOS-UNSIGNED-DEVICE-ARCHIVE.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Meteor-iOS-UNSIGNED-DEVICE-ARCHIVE
+          path: Meteor-iOS-UNSIGNED-DEVICE-ARCHIVE.zip
           retention-days: 14

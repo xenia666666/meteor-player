@@ -7,7 +7,7 @@ import AVKit
     @Published var audioOptions: [AVMediaSelectionOption] = []; @Published var textOptions: [AVMediaSelectionOption] = []
     private var audible: AVMediaSelectionGroup?; private var legible: AVMediaSelectionGroup?
     private var statusObservation: NSKeyValueObservation?; private var timeObserver: Any?; private var endObserver: NSObjectProtocol?
-    private var loadTask: Task<Void, Never>?; private var startup: Task<Void, Never>?
+    private var loadTask: Task<Void, Never>?; private var startup: Task<Void, Never>?; private var metadataTask: Task<Void, Never>?
     private var current: PlaybackRequest?; private var ready = false; private var stopped = false
     func start(_ request: PlaybackRequest, agent: String) {
         stop(); guard request.url.scheme?.lowercased() == "https" else { error = MeteorError.httpsRequired.localizedDescription; return }; stopped = false; current = request; error = ""; metadata = ""; ended = false; ready = false
@@ -60,14 +60,27 @@ import AVKit
         if position.isFinite && position > 5 && duration.isFinite && duration > position + 10 { UserDefaults.standard.set(position, forKey: "resume." + current.item.id) }
     }
     func stop() {
-        savePosition(); stopped = true; loadTask?.cancel(); startup?.cancel(); loadTask = nil; startup = nil; statusObservation = nil
+        savePosition(); stopped = true; loadTask?.cancel(); startup?.cancel(); metadataTask?.cancel(); loadTask = nil; startup = nil; metadataTask = nil; statusObservation = nil
         if let timeObserver { player.removeTimeObserver(timeObserver) }; timeObserver = nil
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }; endObserver = nil
         player.pause(); player.replaceCurrentItem(with: nil); current = nil; audioOptions = []; textOptions = []; audible = nil; legible = nil
         UIApplication.shared.isIdleTimerDisabled = false
     }
-    func metadataOutput(_ output: AVPlayerItemMetadataOutput, didOutputTimedMetadataGroups groups: [AVTimedMetadataGroup], from track: AVPlayerItemTrack?) {
-        for group in groups { for item in group.items { if let value = item.stringValue, !value.isEmpty { metadata = value; return } } }
+    nonisolated func metadataOutput(_ output: AVPlayerItemMetadataOutput, didOutputTimedMetadataGroups groups: [AVTimedMetadataGroup], from track: AVPlayerItemTrack?) {
+        // start() explicitly delivers this delegate on DispatchQueue.main.
+        MainActor.assumeIsolated {
+            guard !stopped, let requestID = current?.id,
+                  player.currentItem?.outputs.contains(where: { $0 === output }) == true else { return }
+            metadataTask?.cancel()
+            metadataTask = Task { [weak self] in
+                for item in groups.flatMap(\.items) {
+                    guard let value = try? await item.load(.stringValue), !value.isEmpty else { continue }
+                    guard !Task.isCancelled, let self, !self.stopped, self.current?.id == requestID,
+                          self.player.currentItem?.outputs.contains(where: { $0 === output }) == true else { return }
+                    self.metadata = value; return
+                }
+            }
+        }
     }
 }
 struct NativePlayerView: UIViewControllerRepresentable {

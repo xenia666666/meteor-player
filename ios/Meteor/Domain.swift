@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 
 enum MeteorConfig {
-    static let version = "0.1.0"
+    static let version = "0.1.1"
     static let panel = URL(string: "https://bipeor-control.bigiboy1990413.chatgpt.site")!
 }
 func tr(_ sk: String, _ hu: String, _ en: String) -> String {

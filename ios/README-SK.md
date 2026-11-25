@@ -1,4 +1,4 @@
-# Meteor pre iPhone a iPad — 0.1.0 (vývojová verzia)
+# Meteor pre iPhone a iPad — 0.1.1 (vývojová verzia)
 
 Natívny SwiftUI projekt pre iOS/iPadOS 17 alebo novší. Nie je to konverzia APK. Schvaľovanie používa existujúci Meteor Panel bez zmien servera.
 
@@ -10,6 +10,8 @@ Natívny SwiftUI projekt pre iOS/iPadOS 17 alebo novší. Nie je to konverzia AP
 - Živá TV, filmy, seriály/epizódy, EPG/archív podľa poskytovateľa, rádio zo zoznamu, vyhľadávanie/skupiny a obľúbené.
 - AVPlayer: natívne ovládanie, zvuk/titulky dostupné v streame, pomer/vyplnenie/roztiahnutie, skok ±1 min, obnovenie filmu a otázka na ďalšiu epizódu. Automatická obnova po prerušení siete zatiaľ nie je doplnená.
 - Panelovému pripojeniu sa neposielajú dáta poskytovateľa. Sieťové odpovede majú limity a chybové správy neobsahujú prihlasovacie URL.
+- Pôvodné logo z Android verzie je v `Meteor/Assets.xcassets/MeteorLogo.imageset`. macOS skript z neho pripraví nepriehľadnú RGB ikonu 1024×1024 pre iPhone, iPad a App Store. Zobrazuje sa aj pri výbere jazyka a aktivácii.
+- Rádiové metadáta sa načítajú asynchrónne; po prepnutí stanice sa oneskorená odpoveď predchádzajúcej stanice zahodí.
 
 ## Dôležité hranice prvej verzie
 
@@ -23,18 +25,19 @@ AVPlayer nepodporuje všetky kontajnery a kodeky Androidu. Živá TV používa H
 
 1. Projekt je v samostatnej vetve `ios-meteor-0.1.0` repozitára `xenia666666/meteor-player`. Android Releases sa nemenia.
 2. GitHub Actions `Meteor iOS build and tests` sa spustí pri pull requeste; po začlenení aj ručne cez Actions → Run workflow.
-3. Workflow na macOS vytvorí projekt, zostaví aplikáciu a spustí XCTest na simulátore iPhonu.
+3. Workflow na macOS pripraví ikonu, vytvorí projekt, zostaví aplikáciu a spustí XCTest na simulátore iPhonu. Súbežne zostaví Release archív pre skutočný iPhone/iPad (arm64).
 4. Artefakt `Meteor-iOS-SIMULATOR-ONLY` je iba pre simulátor. NIE JE to podpísané IPA pre fyzický iPhone. Nestačí ho otvoriť v mobile.
-5. Vo Windowse môžeš prezerať/upravovať zdroj. Lokálny build iOS SDK vyžaduje macOS/Xcode.
+5. Artefakt `Meteor-iOS-UNSIGNED-DEVICE-ARCHIVE` overuje zostavenie pre fyzické zariadenie, správne zabalenú ikonu, manifest súkromia a podporu iPhonu/iPadu. Je bez distribučného podpisu a NIE JE to inštalovateľné IPA. Report `ios-device-archive-report.json` uvádza `installable: false`.
+6. Vo Windowse môžeš prezerať/upravovať zdroj. Lokálny build iOS SDK vyžaduje macOS/Xcode.
 
-Na Macu: z koreňa repozitára `python3 scripts/generate-ios-project.py`, potom otvoriť `ios/Meteor.xcodeproj` a schému `Meteor`.
+Na Macu: z koreňa repozitára `bash scripts/prepare-ios-assets.sh`, potom `python3 scripts/generate-ios-project.py` a otvoriť `ios/Meteor.xcodeproj` / schému `Meteor`. Generovaná ikona je odvodený súbor; pôvodné logo sa nemení. Generátor projektu je prenosný aj na Windows/Linux, ale príprava ikony používa systémový macOS nástroj `sips`.
 
 ## Pred prvým TestFlight
 
 - Aktívne Apple Developer členstvo, vlastný tím a App Store Connect záznam s bundle ID `hu.csaladitv.meteor.ios` (alebo schváleným vlastným ID).
 - Distribučný podpis a provisioning profile pre tento bundle ID. Android ani Samsung certifikáty sa nepoužívajú.
 - Podpisové tajomstvá nastaviť cez GitHub Secrets; nevkladať ich do repozitára, ZIP-u ani logov. Pozri oficiálny návod: https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications .
-- Doplniť finálnu 1024×1024 ikonu, overiť súkromie/export compliance a požiadavky poskytovateľa na HTTPS, skutočné streamy a aktiváciu na iPhone/iPade.
+- Overiť súkromie/export compliance, požiadavky poskytovateľa na HTTPS, skutočné streamy a aktiváciu na iPhone/iPade. Ikona 1024×1024 už je súčasťou zostavenia.
 - Až potom vytvoriť podpísaný archív a odoslať ho do TestFlight. Tento projekt zatiaľ neobsahuje automatické nahrávanie na App Store.
 
 ## Súkromie a transport

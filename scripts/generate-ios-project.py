@@ -14,13 +14,15 @@ for f in apps+tests:
  k=f.relative_to(root).as_posix();refs[k]=obj('file'+k,'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = '+q(f.name)+'; sourceTree = "<group>";');builds[k]=obj('build'+k,'isa = PBXBuildFile; fileRef = '+refs[k]+';')
 privacy=obj('privacyref','isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>";')
 privacybuild=obj('privacybuild','isa = PBXBuildFile; fileRef = '+privacy+';')
+assets=obj('assetsref','isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>";')
+assetsbuild=obj('assetsbuild','isa = PBXBuildFile; fileRef = '+assets+';')
 appProduct=obj('appproduct','isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Meteor.app; sourceTree = BUILT_PRODUCTS_DIR;')
 testProduct=obj('testproduct','isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MeteorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR;')
-sourcegroup=group('sources',[refs[f.relative_to(root).as_posix()] for f in apps]+[privacy],'Meteor')
+sourcegroup=group('sources',[refs[f.relative_to(root).as_posix()] for f in apps]+[privacy,assets],'Meteor')
 testgroup=group('tests',[refs[f.relative_to(root).as_posix()] for f in tests],'Tests')
 products=group('products',[appProduct,testProduct]);main=group('main',[sourcegroup,testgroup,products])
 def phase(key,isa,files):return obj(key,'isa = '+isa+'; buildActionMask = 2147483647; files = ('+','.join(files)+'); runOnlyForDeploymentPostprocessing = 0;')
-appSources=phase('appsources','PBXSourcesBuildPhase',[builds[f.relative_to(root).as_posix()] for f in apps]);testSources=phase('testsources','PBXSourcesBuildPhase',[builds[f.relative_to(root).as_posix()] for f in tests]);appResources=phase('appresources','PBXResourcesBuildPhase',[privacybuild]);testResources=phase('testresources','PBXResourcesBuildPhase',[]);appFrameworks=phase('appframeworks','PBXFrameworksBuildPhase',[]);testFrameworks=phase('testframeworks','PBXFrameworksBuildPhase',[])
+appSources=phase('appsources','PBXSourcesBuildPhase',[builds[f.relative_to(root).as_posix()] for f in apps]);testSources=phase('testsources','PBXSourcesBuildPhase',[builds[f.relative_to(root).as_posix()] for f in tests]);appResources=phase('appresources','PBXResourcesBuildPhase',[privacybuild,assetsbuild]);testResources=phase('testresources','PBXResourcesBuildPhase',[]);appFrameworks=phase('appframeworks','PBXFrameworksBuildPhase',[]);testFrameworks=phase('testframeworks','PBXFrameworksBuildPhase',[])
 def configlist(key,base):
  configs=[]
  for mode in ['Debug','Release']:
@@ -28,7 +30,7 @@ def configlist(key,base):
   configs.append(obj(key+mode,'isa = XCBuildConfiguration; name = '+mode+'; buildSettings = {'+' '.join(q(k)+' = '+q(v)+';' for k,v in settings.items())+'};'))
  return obj(key+'list','isa = XCConfigurationList; buildConfigurations = ('+','.join(configs)+'); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;')
 projectconfigs=configlist('project',{'SDKROOT':'iphoneos','IPHONEOS_DEPLOYMENT_TARGET':'17.0','SWIFT_VERSION':'5.0','CLANG_ENABLE_MODULES':'YES','ENABLE_TESTABILITY':'YES','SWIFT_STRICT_CONCURRENCY':'minimal'})
-appconfigs=configlist('app',{'PRODUCT_NAME':'Meteor','PRODUCT_BUNDLE_IDENTIFIER':'hu.csaladitv.meteor.ios','INFOPLIST_FILE':'Meteor/Info.plist','TARGETED_DEVICE_FAMILY':'1,2','CODE_SIGN_STYLE':'Automatic','CURRENT_PROJECT_VERSION':'1','MARKETING_VERSION':'0.1.0','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','SUPPORTS_MACCATALYST':'NO'})
+appconfigs=configlist('app',{'PRODUCT_NAME':'Meteor','PRODUCT_BUNDLE_IDENTIFIER':'hu.csaladitv.meteor.ios','INFOPLIST_FILE':'Meteor/Info.plist','TARGETED_DEVICE_FAMILY':'1,2','CODE_SIGN_STYLE':'Automatic','CURRENT_PROJECT_VERSION':'2','MARKETING_VERSION':'0.1.1','ASSETCATALOG_COMPILER_APPICON_NAME':'AppIcon','SKIP_INSTALL':'NO','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','SUPPORTS_MACCATALYST':'NO'})
 testconfigs=configlist('test',{'PRODUCT_NAME':'MeteorTests','PRODUCT_BUNDLE_IDENTIFIER':'hu.csaladitv.meteor.ios.tests','GENERATE_INFOPLIST_FILE':'YES','TARGETED_DEVICE_FAMILY':'1,2','TEST_HOST':'$(BUILT_PRODUCTS_DIR)/Meteor.app/Meteor','BUNDLE_LOADER':'$(TEST_HOST)','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks'})
 proxy=obj('proxy','isa = PBXContainerItemProxy; containerPortal = '+uid('project')+'; proxyType = 1; remoteGlobalIDString = '+uid('app')+'; remoteInfo = Meteor;')
 dep=obj('dependency','isa = PBXTargetDependency; target = '+uid('app')+'; targetProxy = '+proxy+';')

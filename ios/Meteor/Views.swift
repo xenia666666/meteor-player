@@ -18,13 +18,17 @@ struct RootView: View {
 }
 struct LanguageView: View {
     @EnvironmentObject var store: AppStore
-    var body: some View { VStack(spacing: 24) { Image(systemName: "sparkles.tv").font(.system(size: 66)).foregroundStyle(.mint); Text("METEOR IPTV PLAYER").font(.title.bold()); ForEach([("sk","Slovenčina"),("hu","Magyar"),("en","English")], id: \.0) { code, title in Button(title) { store.setLanguage(code) }.buttonStyle(.borderedProminent).controlSize(.large) } }.padding() }
+    var body: some View { ScrollView { VStack(spacing: 24) { MeteorArtwork(edge: 220); Text("METEOR IPTV PLAYER").font(.title.bold()); ForEach([("sk","Slovenčina"),("hu","Magyar"),("en","English")], id: \.0) { code, title in Button(title) { store.setLanguage(code) }.buttonStyle(.borderedProminent).controlSize(.large) } }.frame(maxWidth: .infinity).padding(24) } }
+}
+struct MeteorArtwork: View {
+    let edge: CGFloat
+    var body: some View { Image("MeteorLogo").resizable().scaledToFit().frame(width: edge, height: edge).clipShape(RoundedRectangle(cornerRadius: edge * 0.16)).accessibilityHidden(true) }
 }
 struct ActivationView: View {
     @EnvironmentObject var store: AppStore
     var body: some View {
         NavigationStack { ScrollView { VStack(alignment: .leading, spacing: 22) {
-            Label("METEOR", systemImage: "sparkles.tv").font(.largeTitle.bold()).foregroundStyle(.mint)
+            HStack(spacing: 16) { MeteorArtwork(edge: 80); Text("METEOR").font(.largeTitle.bold()).foregroundStyle(.mint) }
             Text(tr("Aktivácia zariadenia","Készülékaktiválás","Device activation")).font(.title2.bold())
             Text(store.activationStatus == "blocked" ? tr("Zariadenie je zablokované.","A készülék le van tiltva.","Device is blocked.") : store.activationStatus == "expired" ? tr("Aktivácia vypršala.","Az aktiválás lejárt.","Activation expired.") : tr("Zariadenie čaká na schválenie v Paneli.","A készülék jóváhagyásra vár a panelen.","Waiting for approval in the Panel."))
             Text("ID: " + (store.identity?.id ?? "—")).font(.system(.body, design: .monospaced)).textSelection(.enabled)
