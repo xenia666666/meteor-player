@@ -18,7 +18,7 @@ import AVKit
         let output = AVPlayerItemMetadataOutput(identifiers: nil); output.setDelegate(self, queue: .main); item.add(output)
         statusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             Task { @MainActor in
-                guard let self, !self.stopped else { return }
+                guard let self, !self.stopped, self.current?.id == request.id else { return }
                 if item.status == .failed { self.fail() }
                 if item.status == .readyToPlay && !self.ready {
                     self.ready = true; self.startup?.cancel()
@@ -30,16 +30,16 @@ import AVKit
             }
         }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
-            Task { @MainActor in guard let self, !self.stopped else { return }; self.ended = true; UserDefaults.standard.removeObject(forKey: "resume." + request.item.id) }
+            Task { @MainActor in guard let self, !self.stopped, self.current?.id == request.id else { return }; self.ended = true; UserDefaults.standard.removeObject(forKey: "resume." + request.item.id) }
         }
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 10, preferredTimescale: 1), queue: .main) { [weak self] _ in Task { @MainActor in self?.savePosition() } }
         loadTask = Task { [weak self] in
             let a = try? await asset.loadMediaSelectionGroup(for: .audible); let t = try? await asset.loadMediaSelectionGroup(for: .legible)
-            guard !Task.isCancelled, let self, !self.stopped else { return }; self.audible = a; self.legible = t; self.audioOptions = a?.options ?? []; self.textOptions = t?.options ?? []
+            guard !Task.isCancelled, let self, !self.stopped, self.current?.id == request.id else { return }; self.audible = a; self.legible = t; self.audioOptions = a?.options ?? []; self.textOptions = t?.options ?? []
         }
         startup = Task { [weak self] in
             do { try await Task.sleep(nanoseconds: 25_000_000_000) } catch { return }
-            guard let self, !self.ready, !self.stopped else { return }; self.fail()
+            guard let self, !self.ready, !self.stopped, self.current?.id == request.id else { return }; self.fail()
         }
         player.play()
     }
