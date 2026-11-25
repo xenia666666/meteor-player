@@ -61,7 +61,7 @@ import UIKit
             }
         } catch is CancellationError { }
         catch {
-            if case MeteorError.http(401) = error { registered = false; try? SecureStore.write("registered", false); panel = nil; playback = nil; sources = []; message = "HTTP 401"; return }
+            if case MeteorError.http(401) = error { registered = false; try? SecureStore.write("registered", false); try? SecureStore.write("last-panel", Optional<PanelState>.none); panel = nil; playback = nil; sources = []; message = "HTTP 401"; return }
             if !active, let cached = try? SecureStore.read("last-panel", as: PanelState.self), cached.active, Date().timeIntervalSince(cached.checked) < 86400 { panel = cached; sources = cached.sources + localSources }
             message = active ? tr("Panel je nedostupný. Používam posledné platné nastavenia.","A panel nem elérhető. Az utolsó beállításokat használom.","Panel unavailable. Using last valid settings.") : tr("Spojenie s Panelom zlyhalo. Skús znova.","A panel nem érhető el. Próbáld újra.","Could not reach the panel. Try again.")
         }
