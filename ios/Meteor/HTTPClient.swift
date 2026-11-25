@@ -7,6 +7,7 @@ final class HTTPClient: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private var continuation: CheckedContinuation<Data, Error>?; private var session: URLSession?
     init(limit: Int, followRedirects: Bool) { self.limit = limit; self.followRedirects = followRedirects }
     static func fetch(_ request: URLRequest, limit: Int = 16 * 1024 * 1024, redirects: Bool = true) async throws -> Data {
+        guard request.url?.scheme?.lowercased() == "https" else { throw MeteorError.httpsRequired }
         let loader = HTTPClient(limit: limit, followRedirects: redirects)
         return try await withTaskCancellationHandler(operation: {
             try await withCheckedThrowingContinuation { continuation in
@@ -34,7 +35,7 @@ final class HTTPClient: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) { if let error { finish(.failure(error)) } else { finish(.success(data)) } }
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         // Panel bearer credentials are never forwarded through a redirect.
-        guard followRedirects, let url = request.url, httpURL(url.absoluteString) != nil else { completionHandler(nil); return }; completionHandler(request)
+        guard followRedirects, let url = request.url, httpURL(url.absoluteString) != nil, url.scheme?.lowercased() == "https" else { completionHandler(nil); return }; completionHandler(request)
     }
     static func json(_ url: URL, body: Object? = nil, headers: [String: String] = [:], limit: Int = 16 * 1024 * 1024, redirects: Bool = true) async throws -> Any {
         var request = URLRequest(url: url); request.setValue("application/json", forHTTPHeaderField: "Accept")
